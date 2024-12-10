@@ -5,12 +5,14 @@
 # This source code and the accompanying materials are made available under     #
 # the terms of the Apache License 2.0 which accompanies this distribution.     #
 # ============================================================================ #
-add_subdirectory(anyon)
-add_subdirectory(oqc)
-add_subdirectory(ionq)
-add_subdirectory(quantinuum)
-add_subdirectory(qudora)
-add_subdirectory(iqm)
-if (AWSSDK_ROOT)
-  add_subdirectory(braket)
-endif()
+target_sources(cudaq-rest-qpu PRIVATE QudoraServerHelper.cpp)
+add_target_config(qudora)
+
+add_library(cudaq-serverhelper-qudora SHARED QudoraServerHelper.cpp )
+target_link_libraries(cudaq-serverhelper-qudora
+  PUBLIC 
+    cudaq-common 
+    fmt::fmt-header-only 
+)
+install(TARGETS cudaq-serverhelper-qudora DESTINATION lib)
+
