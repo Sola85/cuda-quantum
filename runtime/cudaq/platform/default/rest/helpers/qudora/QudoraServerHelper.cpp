@@ -92,6 +92,10 @@ public:
   /// @brief Return true if the job is done
   bool jobIsDone(ServerMessage &getJobResponse) override;
 
+  /// @brief Get the jobs results polling interval.
+  /// @return
+  std::chrono::microseconds nextResultPollingInterval(ServerMessage &postResponse) override;
+
   /// @brief Given a completed job response, map back to the sample_result
   cudaq::sample_result processResults(ServerMessage &postJobResponse,
                                       std::string &jobID) override;
@@ -99,23 +103,24 @@ public:
 
 ServerJobPayload
 QudoraServerHelper::createJob(std::vector<KernelExecution> &circuitCodes) {
-  std::cout << "Create job!\n";
+  std::cout << "Create job with " << circuitCodes.size() << " circuits!\n";
+
+  // Construct the job itself
+  ServerMessage j;
+  j["name"] = "CUDA-Q " + circuitCodes[0].name;
+  j["language"] = "QIR_BITCODE";
+  j["shots"] = {};
+  j["target"] = machine;
+  j["input_data"] = {};
+  j["backend_settings"] = nullptr;
 
   std::vector<ServerMessage> messages;
   for (auto &circuitCode : circuitCodes) {
-    // Construct the job itself
-    ServerMessage j;
-    j["name"] = circuitCode.name;
-    j["language"] = "QIR_BITCODE";
-    j["shots"] = {shots,};
-    j["target"] = machine;
-    j["input_data"] = {circuitCode.code,};
-    j["backend_settings"] = nullptr;
     
-    messages.push_back(j);
-
-    std::cout << "Circuit: " << circuitCode.code << "\n";
+    j["shots"].push_back(shots);
+    j["input_data"].push_back(circuitCode.code);
   }
+  messages.push_back(j);
 
   // Get the tokens we need
   credentialsPath =
@@ -145,14 +150,19 @@ QudoraServerHelper::constructGetJobPath(ServerMessage &postResponse) {
   return constructGetJobPath(job_id);
 }
 
+std::chrono::microseconds
+QudoraServerHelper::nextResultPollingInterval(ServerMessage &postResponse) {
+  return std::chrono::seconds(1);
+}
+
 std::string QudoraServerHelper::constructGetJobPath(std::string &jobId) {
   return baseUrl + "?job_id=" + jobId + "&include_results=True";
 }
 
 bool QudoraServerHelper::jobIsDone(ServerMessage &getJobResponse) {
-  std::cout << "Is job done? " << getJobResponse << "\n";
+  std::cout << "Is job done?\n";
 
-  auto status = getJobResponse[0]["status"].get<std::string>();
+  auto status = getJobResponse[0]["status"].get<std::string>(); //TODO: error handling in case lookup fails
 
   if (status == "Failed") {
     throw std::runtime_error("Job failed to execute. See Qudora Cloud for more details.");
@@ -169,76 +179,20 @@ QudoraServerHelper::processResults(ServerMessage &postJobResponse,
                                        std::string &jobId) {
 
   std::cout << "Processing results! " << postJobResponse << "\n";
-  std::string results_str = postJobResponse[0]["result"][0].get<std::string>();
-  std::cout << "Processing results! " << results_str << "\n";
-
-  nlohmann::json results = nlohmann::json::parse(results_str);
-
-  std::cout << "Processing results! " << results << "\n";
+  auto& resultList = postJobResponse[0]["result"]; //TODO: error handling in case lookup fails
 
   std::vector<ExecutionResult> srs;
 
-  CountsDictionary reg_counts;
-  for (auto &[bitstring, count] : results.items()) {
-    std::cout << "Counts: " << bitstring << ", " << count << "\n";
-    //auto bitResults = result.get<std::vector<std::string>>();
-    
-    reg_counts[bitstring] = count;
+  for (auto& circuitCodeResult: resultList){
+    nlohmann::json circuitCodeResultDict = nlohmann::json::parse(circuitCodeResult.get<std::string>());
+    CountsDictionary reg_counts;
+    for (auto &[bitstring, count] : circuitCodeResultDict.items()) {
+      std::cout << "Counts: " << bitstring << ", " << count << "\n";
+      
+      reg_counts[bitstring] = count;
+    }
+    srs.emplace_back(reg_counts, "__global__");
   }
-  srs.emplace_back(reg_counts, "r00000");
-  //srs.back().sequentialData = bitResults;
-
-  // // Construct idx[] such that output_names[idx[:]] is sorted by QIR qubit
-  // // number. There may initially be duplicate qubit numbers if that qubit was
-  // // measured multiple times. If that's true, make the lower-numbered result
-  // // occur first. (Dups will be removed in the next step below.)
-  // std::vector<std::size_t> idx;
-  
-  // idx.resize(output_names.size());
-  // std::iota(idx.begin(), idx.end(), 0);
-  // std::sort(idx.begin(), idx.end(), [&](std::size_t i1, std::size_t i2) {
-  //   if (output_names[i1].qubitNum == output_names[i2].qubitNum)
-  //     return i1 < i2; // choose lower result number
-  //   return output_names[i1].qubitNum < output_names[i2].qubitNum;
-  // });
-
-  // // The global register only contains the *final* measurement of each
-  // // requested qubit, so eliminate lower-numbered results from idx array.
-  // for (auto it = idx.begin(); it != idx.end();) {
-  //   if (std::next(it) != idx.end()) {
-  //     if (output_names[*it].qubitNum ==
-  //         output_names[*std::next(it)].qubitNum) {
-  //       it = idx.erase(it);
-  //       continue;
-  //     }
-  //   }
-  //   ++it;
-  // }
-
-
-  // // For each shot, we concatenate the measurements results of all qubits.
-  // auto begin = results.begin();
-  // auto nShots = begin.value().get<std::vector<std::string>>().size();
-  // std::vector<std::string> bitstrings(nShots);
-  // for (auto r : idx) {
-  //   // If allNamesPresent == false, that means we are running local mock server
-  //   // tests which don't support the full QIR output recording functions. Just
-  //   // use the first key in that case.
-  //   auto bitResults =
-  //       mockServer ? results.at(begin.key()).get<std::vector<std::string>>()
-  //                  : results.at(output_names[r].registerName)
-  //                        .get<std::vector<std::string>>();
-  //   for (size_t i = 0; auto &bit : bitResults)
-  //     bitstrings[i++] += bit;
-  // }
-
-  // cudaq::CountsDictionary counts;
-  // for (auto &b : bitstrings)
-  //   counts[b]++;
-
-  // // Store the combined results into the global register
-  // srs.emplace_back(counts, GlobalRegisterName);
-  // srs.back().sequentialData = bitstrings;
   return sample_result(srs);
 }
 
