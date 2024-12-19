@@ -152,7 +152,7 @@ QudoraServerHelper::constructGetJobPath(ServerMessage &postResponse) {
 
 std::chrono::microseconds
 QudoraServerHelper::nextResultPollingInterval(ServerMessage &postResponse) {
-  return std::chrono::seconds(1);
+  return std::chrono::milliseconds(200);
 }
 
 std::string QudoraServerHelper::constructGetJobPath(std::string &jobId) {
@@ -182,6 +182,11 @@ QudoraServerHelper::processResults(ServerMessage &postJobResponse,
   auto& resultList = postJobResponse[0]["result"]; //TODO: error handling in case lookup fails
 
   std::vector<ExecutionResult> srs;
+
+  // CUDA-Q does not seem to be capable of accepting the results to multiple programs from one REST API result.
+  if (resultList.size() > 1){
+    throw std::runtime_error("Can not yet accept job results containing more than one program result.");
+  }
 
   for (auto& circuitCodeResult: resultList){
     nlohmann::json circuitCodeResultDict = nlohmann::json::parse(circuitCodeResult.get<std::string>());

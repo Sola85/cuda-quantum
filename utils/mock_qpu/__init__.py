@@ -9,6 +9,10 @@
 from .anyon import *
 from .braket import *
 from .ionq import *
-from .iqm import *
+try:
+    from .iqm import *
+except ModuleNotFoundError:
+    pass # Tests are skipped if mock-qpu is not found, so no further actions are necessary here 
 from .quantinuum import *
+from .qudora import *
 from .quera import *
