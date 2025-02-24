@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -16,13 +16,10 @@
 namespace cudaq {
 
 /// @brief Find and set the API and refresh tokens, and the time string.
-void findApiKeyInFileQudora(std::string &apiKey, const std::string &path,
-                      std::string &refreshKey, std::string &timeStr);
+void findApiKeyInFileQudora(std::string &apiKey, const std::string &path);
 
 /// Search for the API key, invokes findApiKeyInFileQudora
-std::string searchAPIKeyQudora(std::string &key, std::string &refreshKey,
-                         std::string &timeStr,
-                         std::string userSpecifiedConfig = "");
+std::string searchAPIKeyQudora(std::string &key);
 
 /// @brief The QudoraServerHelper implements the ServerHelper interface
 /// to map Job requests and Job result retrievals actions from the calling
@@ -34,15 +31,8 @@ protected:
   std::string baseUrl = "https://api.qudora.com/jobs/";
   /// @brief The machine we are targeting
   std::string machine = "QVLS-Q1";
-  /// @brief Time string, when the last tokens were retrieved
-  std::string timeStr = "";
-  /// @brief The refresh token
-  std::string refreshKey = "";
-  /// @brief The API token for the remote server
-  std::string apiKey = "";
-
-  std::string userSpecifiedCredentials = "";
-  std::string credentialsPath = "";
+  /// @brief Backend settings to be sent to the remote backend.
+  nlohmann::json backend_settings = nullptr;
 
   /// @brief Return the headers required for the REST calls
   RestHeaders generateRequestHeader() const;
@@ -54,13 +44,23 @@ public:
   RestHeaders getHeaders() override;
 
   void initialize(BackendConfig config) override {
-    std::cout << "Initialize!\n";
     backendConfig = config;
 
     // Set the machine
     auto iter = backendConfig.find("machine");
     if (iter != backendConfig.end())
       machine = iter->second;
+
+    // Set the backend_settings
+    iter = backendConfig.find("backend_settings");
+    if (iter != backendConfig.end()){
+      try {
+        backend_settings = nlohmann::json::parse(iter->second);
+      } catch (nlohmann::json::parse_error& e){
+        throw std::runtime_error("Failed to parse backend_settings: "
+                                 + std::string(e.what()));
+      }
+    }
 
     // Set an alternate base URL if provided
     iter = backendConfig.find("url");
@@ -70,12 +70,7 @@ public:
         baseUrl += "/";
     }
 
-    iter = backendConfig.find("credentials");
-    if (iter != backendConfig.end())
-      userSpecifiedCredentials = iter->second;
-
     parseConfigForCommonParams(config);
-    std::cout << "Initialize done!\n";
   }
 
   /// @brief Create a job payload for the provided quantum codes
@@ -103,28 +98,19 @@ public:
 
 ServerJobPayload
 QudoraServerHelper::createJob(std::vector<KernelExecution> &circuitCodes) {
-  std::cout << "Create job with " << circuitCodes.size() << " circuits!\n";
-
   // Construct the job itself
   ServerMessage j;
-  j["name"] = "CUDA-Q " + circuitCodes[0].name;
   j["language"] = "QIR_BITCODE";
-  j["shots"] = {};
   j["target"] = machine;
-  j["input_data"] = {};
-  j["backend_settings"] = nullptr;
 
   std::vector<ServerMessage> messages;
   for (auto &circuitCode : circuitCodes) {
-    
-    j["shots"].push_back(shots);
-    j["input_data"].push_back(circuitCode.code);
+    j["name"] = "CUDA-Q " + circuitCode.name;
+    j["shots"] = {shots};
+    j["input_data"] = {circuitCode.code};
+    j["backend_settings"] = backend_settings;
+    messages.push_back(j);
   }
-  messages.push_back(j);
-
-  // Get the tokens we need
-  credentialsPath =
-      searchAPIKeyQudora(apiKey, refreshKey, timeStr, userSpecifiedCredentials);
 
   // Get the headers
   RestHeaders headers = generateRequestHeader();
@@ -138,9 +124,7 @@ QudoraServerHelper::createJob(std::vector<KernelExecution> &circuitCodes) {
 }
 
 std::string QudoraServerHelper::extractJobId(ServerMessage &postResponse) {
-  std::cout << "extractJobId: " << postResponse << "\n";
   std::string id = to_string(postResponse);
-  std::cout << "Id:" << id << "\n";
   return id;
 }
 
@@ -160,14 +144,17 @@ std::string QudoraServerHelper::constructGetJobPath(std::string &jobId) {
 }
 
 bool QudoraServerHelper::jobIsDone(ServerMessage &getJobResponse) {
-  std::cout << "Is job done?\n";
 
-  auto status = getJobResponse[0]["status"].get<std::string>(); //TODO: error handling in case lookup fails
+  auto status = getJobResponse[0]["status"].get<std::string>();
 
   if (status == "Failed") {
-    throw std::runtime_error("Job failed to execute. See Qudora Cloud for more details.");
+    throw std::runtime_error(
+      "Job failed to execute. See Qudora Cloud for more details."
+    );
   }
-  else if (status == "Canceled" || status == "Deleted" || status == "Cancelling") {
+  else if (status == "Canceled" || 
+           status == "Deleted" || 
+           status == "Cancelling") {
     throw std::runtime_error("Job was cancelled.");
   }
 
@@ -178,22 +165,16 @@ cudaq::sample_result
 QudoraServerHelper::processResults(ServerMessage &postJobResponse,
                                        std::string &jobId) {
 
-  std::cout << "Processing results! " << postJobResponse << "\n";
-  auto& resultList = postJobResponse[0]["result"]; //TODO: error handling in case lookup fails
+  auto& resultList = postJobResponse[0]["result"];
 
   std::vector<ExecutionResult> srs;
 
-  // CUDA-Q does not seem to be capable of accepting the results to multiple programs from one REST API result.
-  if (resultList.size() > 1){
-    throw std::runtime_error("Can not yet accept job results containing more than one program result.");
-  }
-
   for (auto& circuitCodeResult: resultList){
-    nlohmann::json circuitCodeResultDict = nlohmann::json::parse(circuitCodeResult.get<std::string>());
+    nlohmann::json circuitCodeResultDict = nlohmann::json::parse(
+      circuitCodeResult.get<std::string>()
+    );
     CountsDictionary reg_counts;
     for (auto &[bitstring, count] : circuitCodeResultDict.items()) {
-      std::cout << "Counts: " << bitstring << ", " << count << "\n";
-      
       reg_counts[bitstring] = count;
     }
     srs.emplace_back(reg_counts, "__global__");
@@ -203,9 +184,8 @@ QudoraServerHelper::processResults(ServerMessage &postJobResponse,
 
 std::map<std::string, std::string>
 QudoraServerHelper::generateRequestHeader() const {
-  std::cout << "generateRequestHeader!\n";
-  std::string apiKey, refreshKey, timeStr;
-  searchAPIKeyQudora(apiKey, refreshKey, timeStr, userSpecifiedCredentials);
+  std::string apiKey;
+  searchAPIKeyQudora(apiKey);
   std::map<std::string, std::string> headers{
       {"Authorization", "Bearer " + apiKey},
       {"Content-Type", "application/json"},
@@ -220,8 +200,7 @@ RestHeaders QudoraServerHelper::getHeaders() {
 }
 
 
-void findApiKeyInFileQudora(std::string &apiKey, const std::string &path,
-                      std::string &refreshKey, std::string &timeStr) {
+void findApiKeyInFileQudora(std::string &apiKey, const std::string &path) {
   std::ifstream stream(path);
   std::string contents((std::istreambuf_iterator<char>(stream)),
                        std::istreambuf_iterator<char>());
@@ -236,12 +215,8 @@ void findApiKeyInFileQudora(std::string &apiKey, const std::string &path,
                                "<value>` format. (One per line)");
     cudaq::trim(keyAndValue[0]);
     cudaq::trim(keyAndValue[1]);
-    if (keyAndValue[0] == "key")
+    if (keyAndValue[0] == "CUDAQ_QUDORA_CREDENTIALS")
       apiKey = keyAndValue[1];
-    else if (keyAndValue[0] == "refresh")
-      refreshKey = keyAndValue[1];
-    else if (keyAndValue[0] == "time")
-      timeStr = keyAndValue[1];
     else
       throw std::runtime_error(
           "Unknown key in configuration file: " + keyAndValue[0] + ".");
@@ -249,32 +224,23 @@ void findApiKeyInFileQudora(std::string &apiKey, const std::string &path,
   if (apiKey.empty())
     throw std::runtime_error("Empty API key in configuration file (" + path +
                              ").");
-  if (refreshKey.empty())
-    throw std::runtime_error("Empty refresh key in configuration file (" +
-                             path + ").");
-  // The `time` key is not required.
 }
 
 /// Search for the API key
-std::string searchAPIKeyQudora(std::string &key, std::string &refreshKey,
-                         std::string &timeStr,
-                         std::string userSpecifiedConfig) {
+std::string searchAPIKeyQudora(std::string &key) {
   std::string hwConfig;
   // Allow someone to tweak this with an environment variable
   if (auto creds = std::getenv("CUDAQ_QUDORA_CREDENTIALS")){
     hwConfig = std::string(creds);
     key = hwConfig;
-  }
-  else if (!userSpecifiedConfig.empty())
-    hwConfig = userSpecifiedConfig;
-  else {
+  } else {
     hwConfig = std::string(getenv("HOME")) + std::string("/.qudora_config");
     if (cudaq::fileExists(hwConfig)) {
-      findApiKeyInFileQudora(key, hwConfig, refreshKey, timeStr);
+      findApiKeyInFileQudora(key, hwConfig);
     } else {
       throw std::runtime_error(
-          "Cannot find Qudora Config file with credentials "
-          "(~/.qudora_config).");
+          "Cannot find QUDORA API key in CUDAQ_QUDORA_CREDENTIALS or in "
+          "~/.qudora_config");
     }
   }
 

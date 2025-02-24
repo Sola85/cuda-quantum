@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -14,6 +14,7 @@ if (OPENSSL_FOUND AND CUDAQ_ENABLE_PYTHON AND CUDAQ_TEST_MOCK_SERVERS)
   add_subdirectory(iqm)
   add_subdirectory(oqc)
   add_subdirectory(quantinuum)  
+  add_subdirectory(qudora)  
 endif()
 add_subdirectory(qpp_observe)
 add_subdirectory(quera)

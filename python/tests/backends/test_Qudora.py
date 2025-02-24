@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -118,32 +118,28 @@ def test_qudora_observe():
                    2.1433 * spin.y(0) * spin.y(1) + 0.21829 * spin.z(0) -
                    6.125 * spin.z(1))
     
-    try:
+    # Run the observe task on qudora synchronously
+    res = cudaq.observe(kernel, hamiltonian, 0.59)
+    assert assert_close(res.expectation())
 
-        # Run the observe task on qudora synchronously
-        res = cudaq.observe(kernel, hamiltonian, 0.59)
-        assert assert_close(res.expectation())
+    # Launch it asynchronously, enters the job into the queue
+    future = cudaq.observe_async(kernel, hamiltonian, 0.59)
+    # Retrieve the results (since we're on a mock server)
+    res = future.get()
+    assert assert_close(res.expectation())
 
-        # Launch it asynchronously, enters the job into the queue
-        future = cudaq.observe_async(kernel, hamiltonian, 0.59)
-        # Retrieve the results (since we're on a mock server)
-        res = future.get()
-        assert assert_close(res.expectation())
+    # Launch the job async, job goes in the queue, and
+    # we're free to dump the future to file
+    future = cudaq.observe_async(kernel, hamiltonian, 0.59)
 
-        # Launch the job async, job goes in the queue, and
-        # we're free to dump the future to file
-        future = cudaq.observe_async(kernel, hamiltonian, 0.59)
-        print(future)
-        futureAsString = str(future)
+    futureAsString = str(future)
 
-        # Later you can come back and read it in
-        # You must provide the spin_op so we can reconstruct
-        # the results from the term job ids.
-        futureReadIn = cudaq.AsyncObserveResult(futureAsString, hamiltonian)
-        res = futureReadIn.get()
-        assert assert_close(res.expectation())
-    except RuntimeError:
-        pytest.skip("Can not yet accept job results containing more than one program result.")
+    # Later you can come back and read it in
+    # You must provide the spin_op so we can reconstruct
+    # the results from the term job ids.
+    futureReadIn = cudaq.AsyncObserveResult(futureAsString, hamiltonian)
+    res = futureReadIn.get()
+    assert assert_close(res.expectation())
 
 
 def test_qudora_u3_decomposition():

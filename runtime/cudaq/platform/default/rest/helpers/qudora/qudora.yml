@@ -33,3 +33,8 @@ target-arguments:
     type: string
     platform-arg: machine 
     help-string: "Specify QPU."
+  - key: backend_settings
+    required: false
+    type: string
+    platform-arg: backend_settings 
+    help-string: "Additional settings for backend. See QUDORA Documentation for options."
