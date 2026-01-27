@@ -1,5 +1,5 @@
 /****************************************************************-*- C++ -*-****
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -92,13 +92,8 @@ public:
 
 } // namespace details
 
-#if CUDAQ_USE_STD20
 template <typename A>
 using remove_cvref_t = std::remove_cvref_t<A>;
-#else
-template <typename A>
-using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<A>>;
-#endif
 
 /// A `qkernel` must be used to wrap `CUDA-Q` kernels (callables annotated
 /// with the `__qpu__` attribute) when those kernels are \e referenced other
@@ -115,6 +110,8 @@ class qkernel;
 template <typename R, typename... As>
 class qkernel<R(As...)> {
 public:
+  using function_type = R(As...);
+
   qkernel() {}
   qkernel(std::nullptr_t) {}
   qkernel(const qkernel &) = default;
@@ -158,12 +155,6 @@ private:
   std::unique_ptr<details::QKernelInterface<R, As...>> kernelCallable;
 };
 
-#if CUDAQ_USE_STD20
-// Deduction guides for C++20.
-
-template <typename R, typename... As>
-qkernel(R (*)(As...)) -> qkernel<R(As...)>;
-
 template <typename>
 struct qkernel_deduction_guide_helper {};
 
@@ -184,11 +175,21 @@ struct qkernel_deduction_guide_helper<R (P::*)(As...) const &> {
   using type = R(As...);
 };
 
+// Deduction guides for C++20.
+
+template <typename R, typename... As>
+qkernel(R (*)(As...)) -> qkernel<R(As...)>;
+
 template <typename F, typename S = typename qkernel_deduction_guide_helper<
                           decltype(&F::operator())>::type>
 qkernel(F) -> qkernel<S>;
 
-#endif // CUDAQ_USE_STD20
+template <typename A>
+struct is_qkernel_type : std::false_type {};
+template <typename A>
+struct is_qkernel_type<qkernel<A>> : std::true_type {};
+template <typename A>
+concept QKernelType = is_qkernel_type<A>::value;
 
 } // namespace cudaq
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -108,14 +108,43 @@ struct QppDmState : public cudaq::SimulationState {
     return state(indices[0], indices[1]);
   }
 
-  std::unique_ptr<SimulationState>
-  createFromSizeAndPtr(std::size_t size, void *ptr, std::size_t) override {
-    return std::make_unique<QppDmState>(
-        Eigen::Map<qpp::cmat>(reinterpret_cast<std::complex<double> *>(ptr),
-                              std::sqrt(size), std::sqrt(size)));
+  std::unique_ptr<cudaq::SimulationState>
+  createFromData(const state_data &data) override {
+    if (std::holds_alternative<cudaq::complex_matrix>(data)) {
+      // Input is a density matrix
+      auto &cMat = std::get<complex_matrix>(data);
+      if (cMat.rows() != cMat.cols())
+        throw std::runtime_error(
+            "[qpp-dm-state] complex matrix must be square for density matrix.");
+      // Check that it must be a power of 2
+      if (std::bitset<64>(cMat.rows()).count() != 1)
+        throw std::runtime_error("[qpp-dm-state] complex matrix size must be a "
+                                 "power of 2 for density matrix.");
+
+      auto *dataPtr =
+          reinterpret_cast<void *>(const_cast<complex_matrix &>(cMat).get_data(
+              complex_matrix::order::row_major));
+
+      return std::make_unique<QppDmState>(Eigen::Map<qpp::cmat>(
+          reinterpret_cast<std::complex<double> *>(dataPtr), cMat.rows(),
+          cMat.cols()));
+    }
+    // Use the base implementation (1D state vector data)
+    return SimulationState::createFromData(data);
   }
 
-  void dump(std::ostream &os) const override { os << state << "\n"; }
+  std::unique_ptr<SimulationState>
+  createFromSizeAndPtr(std::size_t size, void *ptr, std::size_t type) override {
+    // This is state vector data (1D array), convert it to density matrix: rho =
+    // |psi><psi|
+    auto *stateData =
+        reinterpret_cast<std::complex<double> *>(const_cast<void *>(ptr));
+    qpp::ket psi = qpp::ket::Map(stateData, size);
+    qpp::cmat dm = psi * psi.adjoint();
+    return std::make_unique<QppDmState>(std::move(dm));
+  }
+
+  void dump(std::ostream &os) const override { os << state << std::endl; }
 
   precision getPrecision() const override {
     return cudaq::SimulationState::precision::fp64;
@@ -166,8 +195,8 @@ protected:
     if (krausChannels.empty())
       return;
 
-    cudaq::info("Applying {} kraus channels to qubits {}", krausChannels.size(),
-                qubits);
+    CUDAQ_INFO("Applying {} kraus channels to qubits {}", krausChannels.size(),
+               qubits);
 
     for (auto &channel : krausChannels) {
       // Map our kraus ops to the qpp::cmat
@@ -186,6 +215,36 @@ protected:
       // Apply K rho Kdag
       state = qpp::apply(state, K, casted_qubits);
     }
+  }
+
+  /// @brief This simulator supports all noise channels
+  bool isValidNoiseChannel(const cudaq::noise_model_type &type) const override {
+    return true;
+  }
+
+  /// @brief Apply the given noise channel
+  void applyNoise(const cudaq::kraus_channel &channel,
+                  const std::vector<std::size_t> &qubits) override {
+    flushGateQueue();
+    CUDAQ_INFO("[qpp-dm] apply kraus channel {}", channel.get_type_name());
+    std::vector<std::size_t> casted_qubits;
+    for (auto index : qubits) {
+      casted_qubits.push_back(convertQubitIndex(index));
+    }
+    // Map our kraus ops to the qpp::cmat
+    std::vector<qpp::cmat> K;
+    auto ops = channel.get_ops();
+    std::transform(
+        ops.begin(), ops.end(), std::back_inserter(K), [&](auto &el) {
+          // Note: Kraus channel flattened matrix data is
+          // **row-major**.
+          return Eigen::Map<Eigen::Matrix<std::complex<double>, Eigen::Dynamic,
+                                          Eigen::Dynamic, Eigen::RowMajor>>(
+              el.data.data(), el.nRows, el.nCols);
+        });
+
+    // Apply K rho Kdag
+    state = qpp::apply(state, K, casted_qubits);
   }
 
   /// @brief Grow the density matrix by one qubit.

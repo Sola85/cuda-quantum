@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -48,7 +48,8 @@ ENV LLVM_INSTALL_PREFIX=/usr/local/llvm
 RUN if [ "${toolchain#gcc}" != "$toolchain" ]; then \
         gcc_version=`echo $toolchain | grep -o '[0-9]*'` && \
         if [ -z "$(which gcc 2> /dev/null | grep $gcc_version)" ]; then \
-            dnf install -y --nobest --setopt=install_weak_deps=False gcc-toolset-$gcc_version && \
+            # Using releasever=8.9: boost packages missing from 8.10 mirrors for aarch64
+            dnf install -y --nobest --setopt=install_weak_deps=False --releasever=8.9 gcc-toolset-$gcc_version && \
             enable_script=`find / -path '*gcc*' -path '*'$gcc_version'*' -name enable` && . "$enable_script"; \
         fi && \
         CC="$(which gcc)" && CXX="$(which g++)"; \
@@ -68,7 +69,8 @@ ENV CXX="$LLVM_INSTALL_PREFIX/bootstrap/cxx"
 # Build pybind11 - 
 # we should be able to use the same pybind version independent on what Python version we generate bindings for.
 ENV PYBIND11_INSTALL_PREFIX=/usr/local/pybind11
-RUN dnf install -y --nobest --setopt=install_weak_deps=False \
+# Using releasever=8.9: cmake packages missing from 8.10 mirrors for aarch64
+RUN dnf install -y --nobest --setopt=install_weak_deps=False --releasever=8.9\
         ninja-build cmake python3-devel \
     && mkdir /pybind11-project && cd /pybind11-project && git init \
     && git remote add origin https://github.com/pybind/pybind11 \
@@ -78,31 +80,36 @@ RUN dnf install -y --nobest --setopt=install_weak_deps=False \
     && cmake --build . --target install --config Release \
     && cd / && rm -rf /pybind11-project
 
-RUN curl -L https://github.com/Kitware/CMake/releases/download/v3.26.4/cmake-3.26.4-linux-$(uname -m).sh -o cmake-install.sh \
+RUN curl -L https://github.com/Kitware/CMake/releases/download/v3.28.4/cmake-3.28.4-linux-$(uname -m).sh -o cmake-install.sh \
     && bash cmake-install.sh --skip-licence --exclude-subdir --prefix=/usr/local \
     && rm cmake-install.sh
 
 # Build the the LLVM libraries and compiler toolchain needed to build CUDA-Q.
 ADD ./scripts/build_llvm.sh /scripts/build_llvm.sh
 ADD ./cmake/caches/LLVM.cmake /cmake/caches/LLVM.cmake
+ADD ./tpls/customizations/llvm/ /tpls/customizations/llvm/
 RUN LLVM_PROJECTS='clang;mlir' LLVM_SOURCE=/llvm-project \
     LLVM_CMAKE_CACHE=/cmake/caches/LLVM.cmake \
+    LLVM_CMAKE_PATCHES=/tpls/customizations/llvm \
     bash /scripts/build_llvm.sh -c Release -v
     # No clean up of the build or source directory,
     # since we need to re-build llvm for each python version to get the bindings.
 
 # Install CUDA
 
-ARG cuda_version=11.8
+ARG cuda_version=12.6
 ENV CUDA_VERSION=${cuda_version}
 
 RUN arch_folder=$([ "$(uname -m)" == "aarch64" ] && echo sbsa || echo x86_64) \
     && dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/$distro/$arch_folder/cuda-$distro.repo \
     && dnf clean expire-cache \
-    && dnf install -y --nobest --setopt=install_weak_deps=False wget \
+    # Using releasever=8.9: cmake packages missing from 8.10 mirrors for aarch64
+    && dnf install -y --nobest --setopt=install_weak_deps=False --releasever=8.9 wget \
         cuda-compiler-$(echo ${CUDA_VERSION} | tr . -) \
         cuda-cudart-devel-$(echo ${CUDA_VERSION} | tr . -) \
-        libcublas-devel-$(echo ${CUDA_VERSION} | tr . -)
+        libcublas-devel-$(echo ${CUDA_VERSION} | tr . -) \
+        libcurand-devel-$(echo ${CUDA_VERSION} | tr . -) \
+        libcusparse-devel-$(echo ${CUDA_VERSION} | tr . -)
 
 ENV CUDA_INSTALL_PREFIX=/usr/local/cuda-$CUDA_VERSION
 ENV CUDA_HOME="$CUDA_INSTALL_PREFIX"

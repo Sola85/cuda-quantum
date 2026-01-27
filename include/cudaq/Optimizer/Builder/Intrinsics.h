@@ -1,5 +1,5 @@
 /****************************************************************-*- C++ -*-****
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -21,6 +21,7 @@ static constexpr const char stdMoveBuiltin[] = ".std::move";
 
 static constexpr const char llvmMemCopyIntrinsic[] =
     "llvm.memcpy.p0i8.p0i8.i64";
+static constexpr const char llvmMemSetIntrinsic[] = "llvm.memset.p0i8.i64";
 
 // cudaq::range(count);
 static constexpr const char setCudaqRangeVector[] = "__nvqpp_CudaqRangeInit";
@@ -52,14 +53,25 @@ static constexpr const char getNumQubitsFromCudaqState[] =
     "__nvqpp_cudaq_state_numberOfQubits";
 
 // Create a new state from data.
-static constexpr const char createCudaqStateFromDataFP64[] =
-    "__nvqpp_cudaq_state_createFromData_fp64";
-static constexpr const char createCudaqStateFromDataFP32[] =
-    "__nvqpp_cudaq_state_createFromData_fp32";
+static constexpr const char createCudaqStateFromDataComplexF64[] =
+    "__nvqpp_cudaq_state_createFromData_complex_f64";
+static constexpr const char createCudaqStateFromDataComplexF32[] =
+    "__nvqpp_cudaq_state_createFromData_complex_f32";
+static constexpr const char createCudaqStateFromDataF64[] =
+    "__nvqpp_cudaq_state_createFromData_f64";
+static constexpr const char createCudaqStateFromDataF32[] =
+    "__nvqpp_cudaq_state_createFromData_f32";
 
 // Delete a state created by the runtime functions above.
 static constexpr const char deleteCudaqState[] = "__nvqpp_cudaq_state_delete";
 
+// LLVM intrinsics to save and restore the stack pointer. TODO: Newer versions
+// of LLVM have changed the names to have a suffix of ".p0".
+static constexpr const char llvmStackSave[] = "llvm.stacksave";
+static constexpr const char llvmStackRestore[] = "llvm.stackrestore";
+
+static constexpr const char cudaqConvertToInteger[] =
+    "__nvqpp_cudaqConvertToInteger";
 /// Builder for lowering the clang AST to an IR for CUDA-Q. Lowering includes
 /// the transformation of both quantum and classical computation. Different
 /// features of the CUDA-Q programming model are lowered into different dialects
@@ -148,6 +160,11 @@ public:
   mlir::LogicalResult loadIntrinsic(mlir::ModuleOp module,
                                     llvm::StringRef name);
 
+  llvm::StringRef getIntrinsicText(llvm::StringRef name);
+  mlir::LogicalResult loadIntrinsicWithAliases(mlir::ModuleOp module,
+                                               llvm::StringRef name,
+                                               llvm::StringRef prefix);
+
   std::string hashStringByContent(llvm::StringRef sref);
 
   /// Generates code that yields the size of any type that can be reified in
@@ -164,5 +181,9 @@ public:
     return IRBuilder(block, mlir::Block::iterator(terminator), nullptr);
   }
 };
+
+namespace opt::builder {
+void registerCUDAQBuilderCLOptions();
+}
 
 } // namespace cudaq

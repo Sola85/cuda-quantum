@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -11,7 +11,6 @@ import base64
 import ctypes
 import cudaq
 import uuid
-import uvicorn
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.responses import JSONResponse
 from llvmlite import binding as llvm
@@ -60,6 +59,18 @@ backing_mod = llvm.parse_assembly("")
 engine = llvm.create_mcjit_compiler(backing_mod, targetMachine)
 
 
+def getNumRequiredQubits(function):
+    for a in function.attributes:
+        if "required_num_qubits" in str(a):
+            return int(
+                str(a).split(f'required_num_qubits\"=')[-1].split(" ")
+                [0].replace("\"", "").replace("'", ""))
+        elif "requiredQubits" in str(a):
+            return int(
+                str(a).split(f'requiredQubits\"=')[-1].split(" ")[0].replace(
+                    "\"", "").replace("'", ""))
+
+
 def getKernelFunction(module):
     for f in module.functions:
         if not f.is_declaration:
@@ -72,7 +83,7 @@ def getNumRequiredQubits(function):
         if "requiredQubits" in str(a):
             return int(
                 str(a).split("requiredQubits\"=")[-1].split(" ")[0].replace(
-                    "\"", ""))
+                    "\"", "").replace("'", ""))
 
 
 # Here we expose a way to post jobs,
@@ -182,11 +193,3 @@ async def qetQpu(authentication_token: str = Header(...)):
     }
 
     return JSONResponse(content=data)
-
-
-def startServer(port):
-    uvicorn.run(app, port=port, host='0.0.0.0', log_level="info")
-
-
-if __name__ == '__main__':
-    startServer(62442)

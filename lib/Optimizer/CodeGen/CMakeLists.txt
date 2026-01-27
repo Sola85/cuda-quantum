@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -16,15 +16,19 @@ add_cudaq_library(OptCodeGen
   CodeGenOps.cpp
   CodeGenTypes.cpp
   ConvertCCToLLVM.cpp
-  ConvertToCC.cpp
+  ConvertToExecMgr.cpp
   ConvertToQIRProfile.cpp
   ConvertToQIR.cpp
+  ConvertToQIRAPI.cpp
+  OptUtils.cpp
   Passes.cpp
   Pipelines.cpp
-  QuakeToCC.cpp
+  QirInsertArrayRecord.cpp
   QuakeToCodegen.cpp
+  QuakeToExecMgr.cpp
   QuakeToLLVM.cpp
   RemoveMeasurements.cpp
+  ReturnToOutputLog.cpp
   TranslateToIQMJson.cpp
   TranslateToOpenQASM.cpp
   VerifyNVQIRCalls.cpp
@@ -37,7 +41,6 @@ add_cudaq_library(OptCodeGen
     CodeGenOpsIncGen
     CodeGenTypesIncGen
     OptCodeGenPassIncGen
-    OptPeepholeIncGen
     OptTransformsPassIncGen
     QuakeDialect
     
@@ -54,7 +57,6 @@ add_cudaq_library(OptCodeGen
     MLIRTransforms
 
     # Conversions
-    MLIRAffineToStandard
     MLIRArithToLLVM
     MLIRComplexToLibm
     MLIRComplexToLLVM
@@ -62,7 +64,6 @@ add_cudaq_library(OptCodeGen
     MLIRFuncToLLVM
     MLIRMathToFuncs
     MLIRMathToLLVM
-    MLIRSCFToControlFlow
 
     # Translation
     MLIRTargetLLVMIRExport

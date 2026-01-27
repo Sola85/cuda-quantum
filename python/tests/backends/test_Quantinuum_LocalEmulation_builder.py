@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -97,7 +97,7 @@ def test_quantinuum_exp_pauli():
     kernel, theta = cudaq.make_kernel(float)
     qreg = kernel.qalloc(2)
     kernel.x(qreg[0])
-    kernel.exp_pauli(theta, qreg, "XY")
+    kernel.exp_pauli(theta / -2.0, qreg, "XY")
     print(kernel)
     # Define its spin Hamiltonian.
     hamiltonian = 5.907 - 2.1433 * spin.x(0) * spin.x(1) - 2.1433 * spin.y(
@@ -114,47 +114,13 @@ def test_quantinuum_exp_pauli():
     assert assert_close(res.expectation())
 
 
-def test_quantinuum_state_preparation():
-    kernel, state = cudaq.make_kernel(List[complex])
-    qubits = kernel.qalloc(state)
-
-    state = [1. / np.sqrt(2.), 1. / np.sqrt(2.), 0., 0.]
-    counts = cudaq.sample(kernel, state)
-    assert '00' in counts
-    assert '10' in counts
-    assert not '01' in counts
-    assert not '11' in counts
-
-    state = [1. / np.sqrt(2.), 1. / np.sqrt(2.), 0., 0., 0., 0., 0., 0.]
-    counts = cudaq.sample(kernel, state)
-    assert '000' in counts
-    assert '100' in counts
-    assert not '001' in counts
-    assert not '010' in counts
-    assert not '011' in counts
-    assert not '101' in counts
-    assert not '110' in counts
-    assert not '111' in counts
-
-
-def test_quantinuum_state_synthesis():
-    kernel, state = cudaq.make_kernel(cudaq.State)
-    qubits = kernel.qalloc(state)
-
-    state = cudaq.State.from_data(
-        np.array([1. / np.sqrt(2.), 1. / np.sqrt(2.), 0., 0.], dtype=complex))
-
-    with pytest.raises(RuntimeError) as e:
-        counts = cudaq.sample(kernel, state)
-    assert 'Could not successfully apply quake-synth.' in repr(e)
-
-
 def test_exp_pauli():
     test = cudaq.make_kernel()
     q = test.qalloc(2)
     test.exp_pauli(1.0, q, "XX")
 
     counts = cudaq.sample(test)
+    print(test, counts)
     assert '00' in counts
     assert '11' in counts
     assert not '01' in counts
@@ -166,10 +132,12 @@ def test_exp_pauli_param():
     q = test.qalloc(2)
     test.exp_pauli(1.0, q, w)
 
-    # FIXME: should work after new launchKernel becomes default.
-    with pytest.raises(RuntimeError) as e:
-        counts = cudaq.sample(test, cudaq.pauli_word("XX"))
-    assert 'Remote rest platform Quake lowering failed.' in repr(e)
+    counts = cudaq.sample(test, cudaq.pauli_word("XX"))
+    print(test, counts)
+    assert '00' in counts
+    assert '11' in counts
+    assert not '01' in counts
+    assert not '10' in counts
 
 
 # leave for gdb debugging

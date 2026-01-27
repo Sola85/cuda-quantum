@@ -1,5 +1,5 @@
 /****************************************************************-*- C++ -*-****
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -8,10 +8,7 @@
 
 #pragma once
 
-#include <chrono>
-
-// Be careful about fmt getting into public headers
-#include "common/FmtCore.h"
+#include "common/cudaq_fmt.h"
 
 namespace cudaq {
 
@@ -23,11 +20,12 @@ bool isTimingTagEnabled(int tag);
 namespace details {
 // This enum must match spdlog::level enums. This is checked via static_assert
 // in Logger.cpp.
-enum class LogLevel { trace, debug, info };
+enum class LogLevel { trace, debug, info, warn };
 bool should_log(const LogLevel logLevel);
 void trace(const std::string_view msg);
 void info(const std::string_view msg);
 void debug(const std::string_view msg);
+void warn(const std::string_view msg);
 std::string pathToFileName(const std::string_view fullFilePath);
 } // namespace details
 
@@ -49,7 +47,7 @@ std::string pathToFileName(const std::string_view fullFilePath);
          const char *fileName = __builtin_FILE(),                              \
          int lineNo = __builtin_LINE()) {                                      \
       if (details::should_log(details::LogLevel::NAME)) {                      \
-        auto msg = fmt::format(fmt::runtime(message), args...);                \
+        auto msg = cudaq_fmt::format(message, args...);                        \
         std::string name = funcName;                                           \
         auto start = name.find_first_of(" ");                                  \
         name = name.substr(start + 1, name.find_first_of("(") - start - 1);    \
@@ -63,6 +61,7 @@ std::string pathToFileName(const std::string_view fullFilePath);
   NAME(const std::string_view, Args &&...) -> NAME<Args...>;
 
 CUDAQ_LOGGER_DEDUCTION_STRUCT(info);
+CUDAQ_LOGGER_DEDUCTION_STRUCT(warn);
 
 #ifdef CUDAQ_DEBUG
 CUDAQ_LOGGER_DEDUCTION_STRUCT(debug);
@@ -80,12 +79,12 @@ void log(const std::string_view message, Args &&...args) {
   const auto timestamp = std::chrono::system_clock::now();
   const auto now_c = std::chrono::system_clock::to_time_t(timestamp);
   std::tm now_tm = *std::localtime(&now_c);
-  fmt::print("[{:04}-{:02}-{:02} {:02}:{:02}:{:%S}] {}\n",
-             now_tm.tm_year + 1900, now_tm.tm_mon + 1, now_tm.tm_mday,
-             now_tm.tm_hour, now_tm.tm_min,
-             std::chrono::round<std::chrono::milliseconds>(
-                 timestamp.time_since_epoch()),
-             fmt::format(fmt::runtime(message), args...));
+  cudaq_fmt::print("[{:04}-{:02}-{:02} {:02}:{:02}:{:%S}] {}\n",
+                   now_tm.tm_year + 1900, now_tm.tm_mon + 1, now_tm.tm_mday,
+                   now_tm.tm_hour, now_tm.tm_min,
+                   std::chrono::round<std::chrono::milliseconds>(
+                       timestamp.time_since_epoch()),
+                   cudaq_fmt::format(message, args...));
 }
 
 /// @brief Context information (function, file, and line) of a caller
@@ -170,7 +169,7 @@ private:
       for (std::size_t i = 0; i < nArgs; i++) {
         argsMsg += (i != nArgs - 1) ? "{}, " : "{}}})";
       }
-      argsMsg = fmt::format(fmt::runtime(argsMsg), args...);
+      argsMsg = cudaq_fmt::format(argsMsg, args...);
       globalTraceStack++;
     }
   }
@@ -203,7 +202,7 @@ private:
           argsMsg += (i != nArgs - 1) ? "{}, " : "{}}})";
         }
       }
-      argsMsg = fmt::format(fmt::runtime(argsMsg), args...);
+      argsMsg = cudaq_fmt::format(argsMsg, args...);
       globalTraceStack++;
     }
   }
@@ -250,14 +249,14 @@ public:
               .count() /
           1000.0);
       // If we're printing because the tag was found, then add that tag info
-      std::string tagStr = tagFound ? fmt::format("[tag={}] ", tag) : "";
+      std::string tagStr = tagFound ? cudaq_fmt::format("[tag={}] ", tag) : "";
       std::string sourceInfo =
           context.fileName
-              ? fmt::format("[{}:{}] ",
-                            details::pathToFileName(context.fileName),
-                            context.lineNo)
+              ? cudaq_fmt::format("[{}:{}] ",
+                                  details::pathToFileName(context.fileName),
+                                  context.lineNo)
               : "";
-      auto str = fmt::format(
+      auto str = cudaq_fmt::format(
           "{}{}{}{} executed in {} ms.{}",
           globalTraceStack > 0 ? std::string(globalTraceStack, '-') + " " : "",
           tagStr, sourceInfo, traceName, duration, argsMsg);
@@ -270,6 +269,33 @@ public:
   }
 };
 } // namespace cudaq
+
+// The following macros avoid the unnecessary processing cost of argument
+// evaluation and string formation until after the log level check is done.
+#define CUDAQ_WARN(...)                                                        \
+  do {                                                                         \
+    if (::cudaq::details::should_log(::cudaq::details::LogLevel::warn)) {      \
+      ::cudaq::warn(__VA_ARGS__);                                              \
+    }                                                                          \
+  } while (false)
+
+#define CUDAQ_INFO(...)                                                        \
+  do {                                                                         \
+    if (::cudaq::details::should_log(::cudaq::details::LogLevel::info)) {      \
+      ::cudaq::info(__VA_ARGS__);                                              \
+    }                                                                          \
+  } while (false)
+
+#ifdef CUDAQ_DEBUG
+#define CUDAQ_DBG(...)                                                         \
+  do {                                                                         \
+    if (::cudaq::details::should_log(::cudaq::details::LogLevel::debug)) {     \
+      ::cudaq::debug(__VA_ARGS__);                                             \
+    }                                                                          \
+  } while (false)
+#else
+#define CUDAQ_DBG(...)
+#endif
 
 #define ScopedTraceWithContext(...)                                            \
   cudaq::ScopedTrace trace(cudaq::TraceContext(__builtin_FUNCTION(),           \

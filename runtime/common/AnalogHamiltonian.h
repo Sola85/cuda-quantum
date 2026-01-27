@@ -1,5 +1,5 @@
 /****************************************************************-*- C++ -*-****
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -7,7 +7,8 @@
  ******************************************************************************/
 
 #pragma once
-#include "common/FmtCore.h"
+
+#include "common/cudaq_fmt.h"
 #include "nlohmann/json.hpp"
 #include <optional>
 #include <string>
@@ -36,7 +37,7 @@ using json = nlohmann::json;
 
 /// @brief Convert a double to a JSON string.
 inline std::string doubleAsJsonString(double d) {
-  std::string s = fmt::format("{:.8f}", d);
+  std::string s = cudaq_fmt::format("{:.8f}", d);
   return s;
 }
 
@@ -211,7 +212,7 @@ struct Program {
 
 ///////////////////////////////////////////////////////////////////////////////
 // The following classes represent the result of Analog Hamiltonian Simulation
-// program
+// program for the QuEra backend
 
 /// @brief Represents the metadata of the shot
 struct ShotMetadata {

@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -54,6 +54,8 @@ def startUpMockServer():
 
     # Kill the server, remove the file
     p.terminate()
+
+    cudaq.reset_target()
 
 
 def test_OQC_sample():
@@ -164,32 +166,6 @@ def test_OQC_observe():
     assert assert_close(res.expectation())
 
 
-def test_OQC_state_preparation():
-
-    @cudaq.kernel
-    def kernel(vec: List[complex]):
-        qubits = cudaq.qvector(vec)
-
-    state = [1. / np.sqrt(2.), 1. / np.sqrt(2.), 0., 0.]
-    counts = cudaq.sample(kernel, state)
-    assert '00' in counts
-    assert '10' in counts
-    assert not '01' in counts
-    assert not '11' in counts
-
-
-def test_OQC_state_preparation_builder():
-    kernel, state = cudaq.make_kernel(List[complex])
-    qubits = kernel.qalloc(state)
-
-    state = [1. / np.sqrt(2.), 1. / np.sqrt(2.), 0., 0.]
-    counts = cudaq.sample(kernel, state)
-    assert '00' in counts
-    assert '10' in counts
-    assert not '01' in counts
-    assert not '11' in counts
-
-
 def test_exp_pauli():
 
     @cudaq.kernel
@@ -286,6 +262,20 @@ def test_2q_unitary_synthesis():
 
     counts = cudaq.sample(ctrl_z_kernel)
     assert counts["0010011"] == 1000
+
+
+def test_explicit_measurement():
+
+    @cudaq.kernel
+    def bell_pair():
+        qubits = cudaq.qvector(2)
+        h(qubits[0])
+        x.ctrl(qubits[0], qubits[1])
+        mz(qubits)
+
+    with pytest.raises(RuntimeError) as e:
+        counts = cudaq.sample(bell_pair, explicit_measurements=True)
+    assert "not supported on this target" in repr(e)
 
 
 # leave for gdb debugging

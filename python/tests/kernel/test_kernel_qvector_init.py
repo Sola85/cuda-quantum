@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -287,7 +287,7 @@ def test_kernel_dtype_complex64_params_f32():
 @skipIfNvidiaFP64NotInstalled
 def test_kernel_simulation_dtype_complex_params_f64():
     cudaq.reset_target()
-    cudaq.set_target('nvidia-fp64')
+    cudaq.set_target('nvidia', option='fp64')
 
     c = [1. / np.sqrt(2.) + 0j, 0., 0., 1. / np.sqrt(2.)]
 
@@ -358,7 +358,7 @@ def test_kernel_amplitudes_complex_from_capture():
 @skipIfNvidiaFP64NotInstalled
 def test_kernel_simulation_dtype_np_array_from_capture_f64():
     cudaq.reset_target()
-    cudaq.set_target('nvidia-fp64')
+    cudaq.set_target('nvidia', option='fp64')
 
     c = [1. / np.sqrt(2.) + 0j, 0., 0., 1. / np.sqrt(2.)]
 
@@ -433,11 +433,12 @@ def test_kernel_simulation_dtype_np_array_capture():
 def test_kernel_error_invalid_array_size():
     cudaq.reset_target()
 
-    @cudaq.kernel
-    def kernel():
-        qubits = cudaq.qvector(np.array([1., 0., 0.], dtype=complex))
-
     with pytest.raises(RuntimeError) as e:
+
+        @cudaq.kernel
+        def kernel():
+            qubits = cudaq.qvector(np.array([1., 0., 0.], dtype=complex))
+
         counts = cudaq.sample(kernel)
     assert 'Invalid input state size for qvector init (not a power of 2)' in repr(
         e)
@@ -446,11 +447,12 @@ def test_kernel_error_invalid_array_size():
 def test_kernel_error_invalid_list_size():
     cudaq.reset_target()
 
-    @cudaq.kernel
-    def kernel():
-        qubits = cudaq.qvector([1., 0., 0.])
-
     with pytest.raises(RuntimeError) as e:
+
+        @cudaq.kernel
+        def kernel():
+            qubits = cudaq.qvector([1., 0., 0.])
+
         counts = cudaq.sample(kernel)
     assert 'Invalid input state size for qvector init (not a power of 2)' in repr(
         e)

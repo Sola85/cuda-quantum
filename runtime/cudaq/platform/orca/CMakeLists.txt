@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -24,7 +24,7 @@ target_include_directories(${LIBRARY_NAME} PRIVATE .
 
 target_link_libraries(${LIBRARY_NAME}
   PUBLIC 
-    cudaq-spin 
+    cudaq-operator
     cudaq-common 
   PRIVATE
     pthread
@@ -34,6 +34,5 @@ target_link_libraries(${LIBRARY_NAME}
     cudaq-platform-default)
 
 install(TARGETS ${LIBRARY_NAME} DESTINATION lib)
-install(TARGETS ${LIBRARY_NAME} EXPORT cudaq-orca-qpu-targets DESTINATION lib)
 
 add_target_config(orca)

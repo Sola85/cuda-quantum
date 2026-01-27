@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -28,7 +28,7 @@ endif()
 
 target_link_libraries(cudaq-rest-qpu 
   PUBLIC 
-    cudaq-spin 
+    cudaq-operator
     cudaq-common 
   PRIVATE 
     cudaq-mlir-runtime 
@@ -40,4 +40,3 @@ target_link_libraries(cudaq-rest-qpu
 
 install(TARGETS cudaq-rest-qpu DESTINATION lib)
 
-install(TARGETS ${LIBRARY_NAME} EXPORT cudaq-rest-qpu-targets DESTINATION lib)

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -7,8 +7,9 @@
  ******************************************************************************/
 
 #include "Logger.h"
+#include "FmtCore.h"
 #include "Timing.h"
-#include "spdlog/sinks/stdout_color_sinks.h"
+#include "fmt/args.h"
 #include <filesystem>
 #include <set>
 #include <spdlog/cfg/env.h>
@@ -41,7 +42,7 @@ bool isTimingTagEnabled(int tag) {
 /// level and optionally dump to file if specified.
 __attribute__((constructor)) void initializeLogger() {
   // Default to no logging
-  spdlog::set_level(spdlog::level::off);
+  spdlog::set_level(spdlog::level::warn);
 
   // but someone can specify CUDAQ_LOG_LEVEL=info (for example)
   // as an environment variable. Can also stack them
@@ -91,6 +92,7 @@ __attribute__((constructor)) void initializeLogger() {
 namespace details {
 void trace(const std::string_view msg) { spdlog::trace(msg); }
 void info(const std::string_view msg) { spdlog::info(msg); }
+void warn(const std::string_view msg) { spdlog::warn(msg); }
 void debug(const std::string_view msg) {
 #ifdef CUDAQ_DEBUG
   spdlog::debug(msg);
@@ -106,6 +108,9 @@ static_assert(static_cast<int>(LogLevel::trace) ==
 static_assert(static_cast<int>(LogLevel::info) ==
                   static_cast<int>(spdlog::level::info),
               "log level enum mismatch");
+static_assert(static_cast<int>(LogLevel::warn) ==
+                  static_cast<int>(spdlog::level::warn),
+              "log level enum mismatch");
 bool should_log(const LogLevel logLevel) {
   return spdlog::should_log(static_cast<spdlog::level::level_enum>(logLevel));
 }
@@ -115,3 +120,37 @@ std::string pathToFileName(const std::string_view fullFilePath) {
 }
 } // namespace details
 } // namespace cudaq
+
+namespace cudaq_fmt {
+namespace details {
+
+void print_packed(const std::string_view message,
+                  const std::span<fmt_arg> &args) {
+  ::fmt::dynamic_format_arg_store<::fmt::format_context> store;
+  for (auto const &a : args)
+    std::visit(
+        [&](auto const &v) {
+          store.push_back(v); // uses the matching fmt::formatter<T>
+        },
+        a.value);
+
+  if (::fmt::detail::const_check(!::fmt::detail::use_utf8))
+    return ::fmt::detail::vprint_mojibake(stdout, message, store, false);
+  return ::fmt::vprint_buffered(stdout, message, store);
+}
+
+std::string format_packed(const std::string_view fmt_str,
+                          const std::span<fmt_arg> &args) {
+  ::fmt::dynamic_format_arg_store<::fmt::format_context> store;
+  for (auto const &a : args)
+    std::visit(
+        [&](auto const &v) {
+          store.push_back(v); // uses the matching fmt::formatter<T>
+        },
+        a.value);
+
+  return ::fmt::vformat(fmt_str, store);
+}
+
+} // namespace details
+} // namespace cudaq_fmt

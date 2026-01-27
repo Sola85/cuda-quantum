@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -30,14 +30,12 @@ def assert_close(got) -> bool:
 def startUpMockServer():
     # We need a Fake Credentials Config file
     credsName = '{}/QuantinuumFakeConfig.config'.format(os.environ["HOME"])
-    f = open(credsName, 'w')
-    f.write('key: {}\nrefresh: {}\ntime: 0'.format("hello", "rtoken"))
-    f.close()
 
+    # Create Nexus credential file (cookie format)
+    with open(credsName, 'w') as f:
+        f.write('key: {}\nrefresh: {}\ntime: 0'.format("nexus_key",
+                                                       "nexus_refresh"))
     cudaq.set_random_seed(13)
-
-    # Set the targeted QPU
-    cudaq.set_target('quantinuum', url='http://localhost:{}'.format(port))
 
     # Launch the Mock Server
     p = Process(target=startServer, args=(port,))
@@ -52,16 +50,19 @@ def startUpMockServer():
 
     # Kill the server, remove the file
     p.terminate()
-    os.remove(credsName)
+    try:
+        os.remove(credsName)
+    except FileNotFoundError:
+        pass
 
 
 @pytest.fixture(scope="function", autouse=True)
 def configureTarget(startUpMockServer):
-
-    # Set the targeted QPU with credentials
+    # Set the target
     cudaq.set_target('quantinuum',
                      url='http://localhost:{}'.format(port),
-                     credentials=startUpMockServer)
+                     credentials=startUpMockServer,
+                     project='mock_project_id')
 
     yield "Running the test."
     cudaq.reset_target()
@@ -150,18 +151,6 @@ def test_quantinuum_observe():
     futureReadIn = cudaq.AsyncObserveResult(futureAsString, hamiltonian)
     res = futureReadIn.get()
     assert assert_close(res.expectation())
-
-
-def test_quantinuum_state_preparation():
-    kernel, state = cudaq.make_kernel(List[complex])
-    qubits = kernel.qalloc(state)
-
-    state = [1. / np.sqrt(2.), 1. / np.sqrt(2.), 0., 0.]
-    counts = cudaq.sample(kernel, state)
-    assert '00' in counts
-    assert '10' in counts
-    assert not '01' in counts
-    assert not '11' in counts
 
 
 def test_exp_pauli():

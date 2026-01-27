@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -161,7 +161,7 @@ __qpu__ void bell() {
 CUDAQ_TEST(GetStateTester, checkOverlapFromHostVector) {
   auto state = cudaq::get_state(bell);
   state.dump();
-  std::vector<std::complex<double>> hostStateData{M_SQRT1_2, 0, 0, M_SQRT1_2};
+  std::vector<cudaq::complex> hostStateData{M_SQRT1_2, 0, 0, M_SQRT1_2};
   auto hostState = cudaq::state::from_data(hostStateData);
   hostState.dump();
   // Check overlap with host vector
@@ -170,10 +170,11 @@ CUDAQ_TEST(GetStateTester, checkOverlapFromHostVector) {
 #endif
 
 CUDAQ_TEST(GetStateTester, checkKron) {
-  auto force_kron = [](std::vector<std::complex<cudaq::real>> vec) __qpu__ {
-    cudaq::qubit a;
-    cudaq::qvector qvec(vec);
-  };
+  auto force_kron = [](const std::vector<std::complex<cudaq::real>> &vec)
+                        __qpu__ {
+                          cudaq::qubit a;
+                          cudaq::qvector qvec(cudaq::state{vec});
+                        };
   // Construct a 6-qubit |111111> state
   const int num_qubits_input_state = 6;
   std::vector<std::complex<cudaq::real>> hostStateData(

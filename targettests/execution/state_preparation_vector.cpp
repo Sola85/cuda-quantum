@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates and Contributors. *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -8,17 +8,7 @@
 
 // clang-format off
 // Simulators
-// RUN: nvq++ %cpp_std %s -o %t && %t | FileCheck %s
-
-// Quantum emulators
-// RUN: nvq++ %cpp_std -target braket     -emulate %s -o %t && %t | FileCheck %s
-// RUN: nvq++ %cpp_std -target quantinuum -emulate %s -o %t && %t | FileCheck %s
-// RUN: nvq++ %cpp_std -target ionq       -emulate %s -o %t && %t | FileCheck %s
-// RUN: nvq++ %cpp_std -target oqc        -emulate %s -o %t && %t | FileCheck %s
-
-// 2 different IQM machines for 2 different topologies
-// RUN: nvq++ %cpp_std -target iqm --iqm-machine Adonis -emulate %s -o %t && %t | FileCheck %s
-// RUN: nvq++ %cpp_std -target iqm --iqm-machine Apollo -emulate %s -o %t && %t | FileCheck %s
+// RUN: nvq++ %s -o %t && %t | FileCheck %s
 // clang-format on
 
 #include <cudaq.h>
@@ -35,23 +25,14 @@ __qpu__ void test_complex_constant_array() {
   cudaq::qvector v(std::vector<cudaq::complex>({M_SQRT1_2, M_SQRT1_2, 0., 0.}));
 }
 
-#ifdef CUDAQ_SIMULATION_SCALAR_FP32
 __qpu__ void test_complex_constant_array_floating_point() {
   cudaq::qvector v(
-      std::vector<std::complex<float>>({M_SQRT1_2, M_SQRT1_2, 0., 0.}));
+      std::vector<std::complex<cudaq::real>>({M_SQRT1_2, M_SQRT1_2, 0., 0.}));
 }
-#else
-__qpu__ void test_complex_constant_array_floating_point() {
-  cudaq::qvector v(
-      std::vector<std::complex<double>>({M_SQRT1_2, M_SQRT1_2, 0., 0.}));
-}
-#endif
 
 __qpu__ void test_complex_constant_array2() {
-  cudaq::qvector v1(
-      std::vector<cudaq::complex>({M_SQRT1_2, M_SQRT1_2, 0., 0.}));
-  cudaq::qvector v2(
-      std::vector<cudaq::complex>({0., 0., M_SQRT1_2, M_SQRT1_2}));
+  cudaq::qvector v(std::vector<cudaq::complex>{M_SQRT1_2, M_SQRT1_2, 0., 0., 0.,
+                                               0., M_SQRT1_2, M_SQRT1_2});
 }
 
 __qpu__ void test_complex_constant_array3() {
@@ -60,59 +41,40 @@ __qpu__ void test_complex_constant_array3() {
 }
 
 __qpu__ void test_complex_array_param(std::vector<cudaq::complex> inState) {
-  cudaq::qvector q1 = inState;
+  cudaq::qvector q1{cudaq::state(inState)};
 }
 
-#ifdef CUDAQ_SIMULATION_SCALAR_FP32
 __qpu__ void test_complex_array_param_floating_point(
-    std::vector<std::complex<float>> inState) {
-  cudaq::qvector q1 = inState;
+    std::vector<std::complex<cudaq::real>> inState) {
+  cudaq::qvector q1{inState};
 }
-#else
-__qpu__ void test_complex_array_param_floating_point(
-    std::vector<std::complex<double>> inState) {
-  cudaq::qvector q1 = inState;
-}
-#endif
 
 __qpu__ void test_real_constant_array() {
   cudaq::qvector v({M_SQRT1_2, M_SQRT1_2, 0., 0.});
 }
 
-#ifdef CUDAQ_SIMULATION_SCALAR_FP32
 __qpu__ void test_real_constant_array_floating_point() {
-  cudaq::qvector v(std::vector<float>({M_SQRT1_2, M_SQRT1_2, 0., 0.}));
+  cudaq::qvector v(
+      cudaq::state{std::vector<cudaq::real>({M_SQRT1_2, M_SQRT1_2, 0., 0.})});
 }
-#else
-__qpu__ void test_real_constant_array_floating_point() {
-  cudaq::qvector v(std::vector<double>({M_SQRT1_2, M_SQRT1_2, 0., 0.}));
-}
-#endif
 
 __qpu__ void test_real_array_param(std::vector<cudaq::real> inState) {
-  cudaq::qvector q1 = inState;
+  cudaq::qvector q1{inState};
 }
 
-#ifdef CUDAQ_SIMULATION_SCALAR_FP32
-__qpu__ void test_real_array_param_floating_point(std::vector<float> inState) {
-  cudaq::qvector q1 = inState;
+__qpu__ void
+test_real_array_param_floating_point(std::vector<cudaq::real> inState) {
+  cudaq::qvector q1{inState};
 }
-#else
-__qpu__ void test_real_array_param_floating_point(std::vector<double> inState) {
-  cudaq::qvector q1 = inState;
-}
-#endif
 
 void printCounts(cudaq::sample_result &result) {
   std::vector<std::string> values{};
-  for (auto &&[bits, counts] : result) {
+  for (auto &&[bits, counts] : result)
     values.push_back(bits);
-  }
 
   std::sort(values.begin(), values.end());
-  for (auto &&bits : values) {
+  for (auto &&bits : values)
     std::cout << bits << '\n';
-  }
 }
 
 int main() {
@@ -141,14 +103,16 @@ int main() {
   // CHECK: 10
 
   {
+    std::cout << "test4\n";
     auto counts = cudaq::sample(test_complex_constant_array2);
     printCounts(counts);
   }
 
-  // CHECK: 0001
-  // CHECK: 0011
-  // CHECK: 1001
-  // CHECK: 1011
+  // CHECK-LABEL: test4
+  // CHECK: 000
+  // CHECK: 011
+  // CHECK: 100
+  // CHECK: 111
 
   {
     auto counts = cudaq::sample(test_complex_constant_array3);

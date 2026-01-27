@@ -2,9 +2,11 @@ Using Quantum Hardware Providers
 -----------------------------------
 
 CUDA-Q contains support for using a set of hardware providers (Amazon Braket, 
-IonQ, IQM, OQC, ORCA Computing, Quantinuum and QuEra Computing). 
+Infleqtion, IonQ, IQM, OQC, ORCA Computing, Quantinuum, and QuEra Computing). 
 For more information about executing quantum kernels on different hardware 
 backends, please take a look at :doc:`hardware <../backends/hardware>`.
+
+.. _amazon-braket-examples:
 
 Amazon Braket
 ==================================
@@ -21,6 +23,44 @@ The following code illustrates how to run kernels on Amazon Braket's backends.
    .. literalinclude:: ../../targets/cpp/braket.cpp
       :language: cpp
 
+.. _anyon-examples:
+
+Anyon Technologies
+====================
+
+The following code illustrates how to run kernels on Anyon's backends.
+
+.. tab:: Python
+
+   .. literalinclude:: ../../targets/python/anyon.py
+      :language: python
+
+.. tab:: C++
+
+   .. literalinclude:: ../../targets/cpp/anyon.cpp
+      :language: cpp
+
+
+.. _infleqtion-examples:
+
+Infleqtion
+==================================
+
+The following code illustrates how to run kernels on Infleqtion's backends.
+
+.. tab:: Python
+
+   .. literalinclude:: ../../targets/python/infleqtion.py
+      :language: python
+
+.. tab:: C++
+
+   .. literalinclude:: ../../targets/cpp/infleqtion.cpp
+      :language: cpp
+
+
+.. _ionq-examples:
+
 IonQ
 ==================================
 
@@ -35,6 +75,9 @@ The following code illustrates how to run kernels on IonQ's backends.
 
    .. literalinclude:: ../../targets/cpp/ionq.cpp
       :language: cpp
+
+
+.. _iqm-examples:
 
 IQM
 ==================================
@@ -51,6 +94,9 @@ The following code illustrates how to run kernels on IQM's backends.
    .. literalinclude:: ../../targets/cpp/iqm.cpp
       :language: cpp
 
+
+.. _oqc-examples:
+
 OQC
 ==================================
 
@@ -60,6 +106,14 @@ The following code illustrates how to run kernels on OQC's backends.
 
    .. literalinclude:: ../../targets/python/oqc.py
       :language: python
+
+.. tab:: C++  
+   
+   .. literalinclude:: ../../targets/cpp/oqc.cpp
+      :language: cpp
+
+
+.. _orca-examples:
 
 ORCA Computing
 ==================================
@@ -99,7 +153,28 @@ This experiment is performed on ORCA's backends by the code below.
 
    .. literalinclude:: ../../targets/cpp/orca.cpp
       :language: cpp
-      
+
+
+.. _pasqal-examples:
+
+Pasqal
+==================================
+
+The following code illustrates how to run kernels on Pasqal's backends.
+
+.. tab:: Python
+
+   .. literalinclude:: ../../targets/python/pasqal.py
+      :language: python
+
+.. tab:: C++
+
+   .. literalinclude:: ../../targets/cpp/pasqal.cpp
+      :language: cpp
+
+
+.. _quantinuum-examples:
+
 Quantinuum
 ==================================
 
@@ -115,6 +190,44 @@ The following code illustrates how to run kernels on Quantinuum's backends.
    .. literalinclude:: ../../targets/cpp/quantinuum.cpp
       :language: cpp
 
+
+.. _quantum-circuits-examples:
+
+Quantum Circuits, Inc.
+========================
+
+The following code illustrates how to run kernels on Quantum Circuits' backends.
+
+.. tab:: Python
+
+   .. literalinclude:: ../../targets/python/qci.py
+      :language: python
+
+.. tab:: C++
+
+   .. literalinclude:: ../../targets/cpp/qci.cpp
+      :language: cpp
+
+.. _quantum-machines-examples:
+
+Quantum Machines
+==================================
+
+The following code illustrates how to run kernels on Quantum Machines' backends.
+
+.. tab:: Python
+
+   .. literalinclude:: ../../targets/python/quantum_machines.py
+      :language: python
+
+.. tab:: C++
+
+   .. literalinclude:: ../../targets/cpp/quantum_machines.cpp
+      :language: cpp
+
+
+.. _quera-examples:
+
 QuEra Computing
 ==================================
 
@@ -124,4 +237,9 @@ The following code illustrates how to run kernels on QuEra's backends.
 
    .. literalinclude:: ../../targets/python/quera_basic.py
       :language: python
+
+.. tab:: C++
+
+   .. literalinclude:: ../../targets/cpp/quera_basic.cpp
+      :language: cpp
 

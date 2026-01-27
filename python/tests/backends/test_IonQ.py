@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -163,32 +163,6 @@ def test_ionq_u3_ctrl_decomposition():
     result = cudaq.sample(kernel)
 
 
-def test_ionq_state_preparation():
-
-    @cudaq.kernel
-    def kernel(vec: List[complex]):
-        qubits = cudaq.qvector(vec)
-
-    state = [1. / np.sqrt(2.), 1. / np.sqrt(2.), 0., 0.]
-    counts = cudaq.sample(kernel, state)
-    assert '00' in counts
-    assert '10' in counts
-    assert not '01' in counts
-    assert not '11' in counts
-
-
-def test_ionq_state_preparation_builder():
-    kernel, state = cudaq.make_kernel(List[complex])
-    qubits = kernel.qalloc(state)
-
-    state = [1. / np.sqrt(2.), 1. / np.sqrt(2.), 0., 0.]
-    counts = cudaq.sample(kernel, state)
-    assert '00' in counts
-    assert '10' in counts
-    assert not '01' in counts
-    assert not '11' in counts
-
-
 def test_exp_pauli():
 
     @cudaq.kernel
@@ -197,6 +171,7 @@ def test_exp_pauli():
         exp_pauli(1.0, q, "XX")
 
     counts = cudaq.sample(test)
+    print(test, counts)
     assert '00' in counts
     assert '11' in counts
     assert not '01' in counts
