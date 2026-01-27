@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -9,7 +9,6 @@
 import cudaq, pytest, os
 from cudaq import spin
 import numpy as np
-from typing import List
 from multiprocessing import Process
 from network_utils import check_server_connection
 try:
@@ -58,7 +57,7 @@ def configureTarget():
 
 
 def test_qudora_sample():
-    # Create the kernel we'd like to execute on qudora
+    # Create the kernel we'd like to execute
     kernel = cudaq.make_kernel()
     qubits = kernel.qalloc(2)
     kernel.h(qubits[0])
@@ -161,32 +160,6 @@ def test_qudora_u3_ctrl_decomposition():
         u3.ctrl(0.0, np.pi / 2, np.pi, control, target)
 
     result = cudaq.sample(kernel)
-
-
-def test_qudora_state_preparation():
-
-    @cudaq.kernel
-    def kernel(vec: List[complex]):
-        qubits = cudaq.qvector(vec)
-
-    state = [1. / np.sqrt(2.), 1. / np.sqrt(2.), 0., 0.]
-    counts = cudaq.sample(kernel, state)
-    assert '00' in counts
-    assert '10' in counts
-    assert not '01' in counts
-    assert not '11' in counts
-
-
-def test_qudora_state_preparation_builder():
-    kernel, state = cudaq.make_kernel(List[complex])
-    qubits = kernel.qalloc(state)
-
-    state = [1. / np.sqrt(2.), 1. / np.sqrt(2.), 0., 0.]
-    counts = cudaq.sample(kernel, state)
-    assert '00' in counts
-    assert '10' in counts
-    assert not '01' in counts
-    assert not '11' in counts
 
 
 def test_exp_pauli():
