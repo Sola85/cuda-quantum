@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2024 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2024 - 2026 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -16,10 +16,9 @@ config:
   # Add the rest-qpu library to the link list
   link-libs: ["-lcudaq-rest-qpu"]
   # Define the JIT lowering pipeline
-  jit-high-level-pipeline: "expand-measurements"
-  jit-mid-level-pipeline: "quantinuum-gate-set-mapping"
+  jit-mid-level-pipeline: "qudora-gate-set-mapping"
   # Tell the rest-qpu that we are generating Adaptive QIR.
-  codegen-emission: qir-adaptive
+  codegen-emission: qir-adaptive:1.0:int_computations,float_computations,output_log # TODO: Update to QIR 2.0 when supported by cudaq
   # Library mode is only for simulators, physical backends must turn this off
   library-mode: false
 

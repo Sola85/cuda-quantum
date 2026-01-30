@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -25,7 +25,7 @@ std::string searchAPIKeyQudora(std::string &key);
 /// to map Job requests and Job result retrievals actions from the calling
 /// Executor to the specific schema required by the remote Qudora REST
 /// server.
-class QudoraServerHelper : public ServerHelper {
+class QudoraServerHelper : public ServerHelper, public QirServerHelper {
 protected:
   /// @brief The base URL
   std::string baseUrl = "https://api.qudora.com/jobs/";
@@ -94,6 +94,10 @@ public:
   /// @brief Given a completed job response, map back to the sample_result
   cudaq::sample_result processResults(ServerMessage &postJobResponse,
                                       std::string &jobID) override;
+
+  /// @brief Extract QIR output data from the server's response to a job
+  std::string extractOutputLog(ServerMessage &postJobResponse,
+                               std::string &jobId) override;
 };
 
 ServerJobPayload
@@ -163,23 +167,18 @@ bool QudoraServerHelper::jobIsDone(ServerMessage &getJobResponse) {
 
 cudaq::sample_result
 QudoraServerHelper::processResults(ServerMessage &postJobResponse,
-                                       std::string &jobId) {
+                                   std::string &jobId) {
 
-  auto& resultList = postJobResponse[0]["result"];
+  auto qirResults = extractOutputLog(postJobResponse, jobId);
+  return createSampleResultFromQirOutput(qirResults);
+}
 
-  std::vector<ExecutionResult> srs;
-
-  for (auto& circuitCodeResult: resultList){
-    nlohmann::json circuitCodeResultDict = nlohmann::json::parse(
-      circuitCodeResult.get<std::string>()
-    );
-    CountsDictionary reg_counts;
-    for (auto &[bitstring, count] : circuitCodeResultDict.items()) {
-      reg_counts[bitstring] = count;
-    }
-    srs.emplace_back(reg_counts, "__global__");
-  }
-  return sample_result(srs);
+std::string QudoraServerHelper::extractOutputLog(ServerMessage &postJobResponse,
+                                              std::string &jobId) {
+  CUDAQ_DBG("postJobResponse: {}", postJobResponse.dump());
+  CUDAQ_INFO("jobId: {}", jobId);
+  auto qirResults = postJobResponse[0]["qir_result"][0].get<std::string>();
+  return qirResults;
 }
 
 std::map<std::string, std::string>

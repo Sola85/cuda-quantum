@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2026 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -36,6 +36,45 @@ class JobStatus(BaseModel):
     status: str
     target: str
 
+class KernelAnalyzer:
+    """Analyzes LLVM modules to extract kernel information"""
+
+    @staticmethod
+    def get_kernel_function(module):
+        """Find the main kernel function in the module"""
+        for func in module.functions:
+            if not func.is_declaration:
+                return func
+        return None
+
+    @staticmethod
+    def _extract_attribute_value(function,
+                                 attribute_names: list[str]) -> int | None:
+        """Extract integer value from function attributes"""
+        for attr in function.attributes:
+            attr_str = str(attr)
+            for attr_name in attribute_names:
+                if attr_name in attr_str:
+                    try:
+                        value = attr_str.split(f'{attr_name}"=')[-1].split(
+                            " ")[0]
+                        return int(value.replace('"', '').replace("'", ""))
+                    except (IndexError, ValueError):
+                        continue
+        return None
+
+    @classmethod
+    def get_num_required_qubits(cls, function) -> int | None:
+        """Extract required number of qubits from function attributes"""
+        return cls._extract_attribute_value(
+            function, ["required_num_qubits", "requiredQubits"])
+
+    @classmethod
+    def get_num_required_results(cls, function) -> int | None:
+        """Extract required number of results from function attributes"""
+        return cls._extract_attribute_value(
+            function, ["required_num_results", "requiredResults"])
+
 
 # Keep track of Job Ids to their Names
 createdJobs = {}
@@ -55,36 +94,24 @@ backing_mod = llvm.parse_assembly("")
 engine = llvm.create_mcjit_compiler(backing_mod, targetMachine)
 
 
-def getKernelFunction(module):
-    for f in module.functions:
-        if not f.is_declaration:
-            return f
-    return None
-
-
-def getNumRequiredQubits(function):
-    for a in function.attributes:
-        if "requiredQubits" in str(a):
-            return int(
-                str(a).split("requiredQubits\"=")[-1].split(" ")[0].replace(
-                    "\"", ""))
-
-def simulate_qir(program: str, shots: int):
+def simulate_qir(program: str, shots: int) -> str:
     decoded = base64.b64decode(program)
     m = llvm.module.parse_bitcode(decoded)
     mstr = str(m)
     assert ('entry_point' in mstr)
 
+    analyzer = KernelAnalyzer()
+
     # Get the function, number of qubits, and kernel name
-    function = getKernelFunction(m)
+    function = analyzer.get_kernel_function(m)
     if function == None:
         raise Exception("Could not find kernel function")
-    numQubitsRequired = getNumRequiredQubits(function)
     kernelFunctionName = function.name
+    numQubitsRequired = analyzer.get_num_required_qubits(function) or 0
+    numResultsRequired = analyzer.get_num_required_results(function) or 0
 
     print("Kernel name = ", kernelFunctionName)
     print("Requires {} qubits".format(numQubitsRequired))
-    print(mstr)
 
     # JIT Compile and get Function Pointer
     engine.add_module(m)
@@ -93,18 +120,23 @@ def simulate_qir(program: str, shots: int):
     funcPtr = engine.get_function_address(kernelFunctionName)
     kernel = ctypes.CFUNCTYPE(None)(funcPtr)
 
-    # Invoke the Kernel
-    cudaq.testing.toggleDynamicQubitManagement()
-    qubits, context = cudaq.testing.initialize(numQubitsRequired, shots)
-    print("Calling kernel!")
-    kernel()
-    results = cudaq.testing.finalize(qubits, context)
-    
-    result_dict = {bits: counts for bits, counts in results.items()}
-    print(result_dict)
+    qir_log = f"HEADER\tschema_id\tlabeled\nHEADER\tschema_version\t1.0\nSTART\nMETADATA\tentry_point\nMETADATA\tqir_profiles\tadaptive_profile\nMETADATA\trequired_num_qubits\t{numQubitsRequired}\nMETADATA\trequired_num_results\t{numResultsRequired}\n"
+    for i in range(shots): # TODO: remove manual for loop, as soon as cudaq.testing.initialize(numQubitsRequired, shots) works with output logging.
+        cudaq.testing.toggleDynamicQubitManagement()
+        qubits, context = cudaq.testing.initialize(numQubitsRequired, 1, "run")
+        kernel()
+        _ = cudaq.testing.finalize(qubits, context)
+
+        shot_log = cudaq.testing.getAndClearOutputLog()
+        if i > 0:
+            qir_log += "START\n"
+        qir_log += shot_log
+        qir_log += "END\t0\n"
+
+
     engine.remove_module(m)
 
-    return json.dumps(result_dict)
+    return qir_log
 
 
 # Here we expose a way to post jobs,
@@ -152,7 +184,7 @@ async def getJob(job_id: str, include_results: bool):
 
     res = [{
         "status": "Completed",
-        "result": createdJobs[job_id]
+        "qir_result": createdJobs[job_id]
     }]
     print("Returning result:", res)
     return res
