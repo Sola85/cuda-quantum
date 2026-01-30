@@ -9,9 +9,11 @@
 #include "common/RestClient.h"
 #include "common/ServerHelper.h"
 #include "cudaq/utils/cudaq_utils.h"
+#include "llvm/Support/Base64.h"
 #include <fstream>
 #include <iostream>
 #include <thread>
+#include <zlib.h>
 
 namespace cudaq {
 
@@ -100,6 +102,42 @@ public:
                                std::string &jobId) override;
 };
 
+std::string zlibDecompress(const std::vector<char>& compressed){
+    z_stream zs{};
+    zs.next_in  = reinterpret_cast<Bytef*>(
+        const_cast<char*>(compressed.data()));
+    zs.avail_in = static_cast<uInt>(compressed.size());
+
+    if (inflateInit(&zs) != Z_OK)
+        throw std::runtime_error("inflateInit failed");
+
+    int ret;
+    char outbuffer[32768];
+    std::string output;
+
+    do {
+        zs.next_out = reinterpret_cast<Bytef*>(outbuffer);
+        zs.avail_out = sizeof(outbuffer);
+
+        ret = inflate(&zs, 0);
+
+        if (output.size() < zs.total_out) {
+            output.append(
+                outbuffer,
+                zs.total_out - output.size()
+            );
+        }
+
+    } while (ret == Z_OK);
+
+    inflateEnd(&zs);
+
+    if (ret != Z_STREAM_END)
+        throw std::runtime_error("zlib decompression failed");
+
+    return output;
+}
+
 ServerJobPayload
 QudoraServerHelper::createJob(std::vector<KernelExecution> &circuitCodes) {
   // Construct the job itself
@@ -177,7 +215,11 @@ std::string QudoraServerHelper::extractOutputLog(ServerMessage &postJobResponse,
                                               std::string &jobId) {
   CUDAQ_DBG("postJobResponse: {}", postJobResponse.dump());
   CUDAQ_INFO("jobId: {}", jobId);
-  auto qirResults = postJobResponse[0]["qir_result"][0].get<std::string>();
+  auto compressedQirResultsB64 = postJobResponse[0]["qir_result"][0].get<std::string>();
+  std::vector<char> compressQirResults;
+  if (llvm::decodeBase64(compressedQirResultsB64, compressQirResults))
+      throw std::runtime_error("Invalid results received.");
+  auto qirResults = zlibDecompress(compressQirResults);
   return qirResults;
 }
 

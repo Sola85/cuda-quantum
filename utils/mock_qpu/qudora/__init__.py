@@ -13,6 +13,8 @@ import uvicorn, uuid, base64, ctypes
 from pydantic import BaseModel
 from llvmlite import binding as llvm
 import json
+import base64
+import zlib
 
 # Define the REST Server App
 app = FastAPI()
@@ -136,7 +138,10 @@ def simulate_qir(program: str, shots: int) -> str:
 
     engine.remove_module(m)
 
-    return qir_log
+    compressed_log = base64.b64encode(zlib.compress(qir_log.encode())).decode()
+    print("Sizes:", len(qir_log), len(compressed_log))
+
+    return compressed_log
 
 
 # Here we expose a way to post jobs,
@@ -186,7 +191,6 @@ async def getJob(job_id: str, include_results: bool):
         "status": "Completed",
         "qir_result": createdJobs[job_id]
     }]
-    print("Returning result:", res)
     return res
 
 
